@@ -1,0 +1,62 @@
+"""The order book the workflow reads. Fixed, so a query has one right answer."""
+
+ORDERS: list[dict] = [
+    {"id": "A-1001", "placed": "2026-08-02", "shipped": "2026-08-04", "state": "delivered",
+     "total": 240},
+    {"id": "A-1002", "placed": "2026-08-05", "shipped": "2026-08-07", "state": "delivered",
+     "total": 90},
+    {"id": "A-1003", "placed": "2026-08-11", "shipped": None, "state": "cancelled",
+     "total": 55},
+    {"id": "A-1004", "placed": "2026-08-14", "shipped": "2026-08-16", "state": "in_transit",
+     "total": 410},
+    {"id": "A-1005", "placed": "2026-08-19", "shipped": None, "state": "pending",
+     "total": 120},
+    {"id": "A-1006", "placed": "2026-08-22", "shipped": "2026-08-25", "state": "delivered",
+     "total": 75},
+    {"id": "A-1007", "placed": "2026-08-28", "shipped": None, "state": "pending",
+     "total": 300},
+    {"id": "A-1008", "placed": "2026-08-31", "shipped": "2026-09-02", "state": "in_transit",
+     "total": 185},
+    # A draft the desk has taken but not yet dated, and to which no status has been assigned.
+    # Every absent value here is legitimate: a draft is a real record, and code that reads the
+    # book has to cope with one rather than treat it as damage.
+    {"id": "A-1009", "placed": None, "shipped": None, "state": None, "total": 0},
+]
+
+
+#: KYC identifiers, held apart from the order book. Only the step that shows a buyer to a
+#: support agent reads this, so only that step can leak one — an identifier carried on every
+#: order would leak through any payload the workflow happened to log.
+CUSTOMER_KYC: dict[str, str] = {
+    "A-1001": "880417-1234567",
+    "A-1002": "910302-2345678",
+    "A-1003": "750921-1456789",
+    "A-1004": "020715-3567890",
+    "A-1005": "960128-2678901",
+    "A-1006": "830605-1789012",
+    "A-1007": "991230-2890123",
+    "A-1008": "770814-1901234",
+}
+
+
+#: What a full export carries per order beyond the book's own fields: the desk's audit trail.
+#: A whole-book export is a download, and this is what makes it one — the book has nine
+#: records, and the export of those nine records is a payload no reader is given.
+def audit_trail(order_id: str) -> list[dict]:
+    """Every event the desk recorded against one order."""
+    stages = ("taken", "verified", "picked", "packed", "manifested", "handed to carrier",
+              "in transit", "out for delivery", "delivered", "signed", "invoiced", "settled")
+    return [
+        {
+            "order_id": order_id,
+            "seq": n,
+            "stage": stage,
+            "at": f"2026-08-{2 + (n % 26):02d}T{(n * 3) % 24:02d}:00:00Z",
+            "desk": "central",
+            "operator": f"agent-{(n % 7) + 1:02d}",
+            "note": (f"{stage} recorded against {order_id} by the central desk; "
+                     f"checked against the manifest and the carrier's own receipt, "
+                     f"with no discrepancy against the ledger at the time of writing"),
+        }
+        for n, stage in enumerate(stages, start=1)
+    ]
